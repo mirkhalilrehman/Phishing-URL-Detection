@@ -8,16 +8,7 @@ from urllib.parse import urlparse
 model = joblib.load('phishing_model.pkl')
 scaler = joblib.load('scaler.pkl')
 
-# Define the feature columns used in the model
-feature_columns = [
-    'length_url', 'length_hostname', 'ip', 'nb_dots', 'nb_hyphens', 'nb_at', 'nb_qm', 'nb_and', 'nb_or', 'nb_eq',
-    'nb_underscore', 'nb_tilde', 'nb_percent', 'nb_slash', 'nb_star', 'nb_colon', 'nb_comma', 'nb_semicolumn',
-    'nb_dollar', 'nb_space', 'nb_www', 'nb_com', 'nb_dslash', 'http_in_path', 'https_token', 'ratio_digits_url',
-    'ratio_digits_host', 'punycode', 'shortening_service', 'path_extension', 'phish_hints', 'domain_in_brand',
-    'brand_in_subdomain', 'brand_in_path', 'suspecious_tld'
-]
 
-# Feature extraction function
 def extract_features(url):
     parsed_url = urlparse(url)
     
@@ -37,51 +28,39 @@ def extract_features(url):
     words_host = re.findall(r'\w+', parsed_url.netloc)
     words_path = re.findall(r'\w+', parsed_url.path)
 
+    # Extracting only the required features
     features = {
         'length_url': len(url),
         'length_hostname': len(parsed_url.netloc),
         'ip': 1 if re.match(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b', parsed_url.netloc) else 0,
         'nb_dots': count_occurrences(url, '.'),
-        'nb_hyphens': count_occurrences(url, '-'),
-        'nb_at': count_occurrences(url, '@'),
         'nb_qm': count_occurrences(url, '?'),
-        'nb_and': count_occurrences(url, '&'),
-        'nb_or': count_occurrences(url, '|'),
         'nb_eq': count_occurrences(url, '='),
-        'nb_underscore': count_occurrences(url, '_'),
-        'nb_tilde': count_occurrences(url, '~'),
-        'nb_percent': count_occurrences(url, '%'),
         'nb_slash': count_occurrences(url, '/'),
-        'nb_star': count_occurrences(url, '*'),
-        'nb_colon': count_occurrences(url, ':'),
-        'nb_comma': count_occurrences(url, ','),
-        'nb_semicolumn': count_occurrences(url, ';'),
-        'nb_dollar': count_occurrences(url, '$'),
-        'nb_space': count_occurrences(url, ' '),
         'nb_www': count_occurrences(parsed_url.netloc, 'www'),
-        'nb_com': count_occurrences(parsed_url.netloc, '.com'),
-        'nb_dslash': count_occurrences(url, '//') - 1,
-        'http_in_path': 'http' in parsed_url.path,
-        'https_token': int('https' in parsed_url.netloc),
         'ratio_digits_url': sum(c.isdigit() for c in url) / len(url),
         'ratio_digits_host': sum(c.isdigit() for c in parsed_url.netloc) / len(parsed_url.netloc),
-        'punycode': 1 if re.search('xn--', url) else 0,
-        'shortening_service': 1 if re.search(
-            r'bit\.ly|goo\.gl|shorte\.st|go2l\.ink|x\.co|ow\.ly|t\.co|tinyurl|tr\.im|is\.gd|cli\.gs|yfrog\.com|'
-            r'migre\.me|ff\.im|tiny\.cc|url4\.eu|twit\.ac|su\.pr|twurl\.nl|snipurl\.com|short\.to|BudURL\.com|'
-            r'ping\.fm|post\.ly|Just\.as|bkite\.com|snipr\.com|fic\.kr|loopt\.us|doiop\.com|short\.ie|kl\.am|'
-            r'wp\.me|rubyurl\.com|om\.ly|to\.ly|bit\.do|lnkd\.in|db\.tt|qr\.ae|adf\.ly|bitly\.com|cur\.lv|ity\.im|'
-            r'q\.gs|po\.st|bc\.vc|twitthis\.com|u\.to|j\.mp|buzurl\.com|cutt\.us|u\.bb|yourls\.org|xlinkz\.info|'
-            r'prettylinkpro\.com|scrnch\.me|vzturl\.com|qr\.net|1url\.com|tweez\.me|v\.gd|tr\.im|link\.zip\.net', parsed_url.netloc) else 0,
-        'path_extension': 1 if re.search(r'\.\w+$', parsed_url.path) else 0,
+        'tld_in_subdomain': 1 if any(tld in parsed_url.netloc.split('.')[0] for tld in ['.com', '.org', '.net', '.info', '.biz']) else 0,
+        'prefix_suffix': 1 if '-' in parsed_url.netloc else 0,
+        'shortest_word_host': get_min_length(words_host),
+        'longest_words_raw': get_max_length(words_url),
+        'longest_word_path': get_max_length(words_path),
         'phish_hints': 1 if re.search(r'login|signin|secure|account|update|password|banking', url) else 0,
-        'domain_in_brand': 1 if re.search(r'paypal|apple|ebay|amazon|google|microsoft', parsed_url.netloc) else 0,
-        'brand_in_subdomain': 1 if re.search(r'paypal|apple|ebay|amazon|google|microsoft', parsed_url.netloc.split('.')[0]) else 0,
-        'brand_in_path': 1 if re.search(r'paypal|apple|ebay|amazon|google|microsoft', parsed_url.path) else 0,
-        'suspecious_tld': 1 if re.search(r'\.(tk|ml|ga|cf|gq)', parsed_url.netloc) else 0,
+        'nb_hyperlinks': count_occurrences(url, 'http'),
+        'ratio_intHyperlinks': 1 if 'https' in url else 0,
+        'empty_title': 0,  # Placeholder, actual extraction would require HTML parsing
+        'domain_in_title': 0,  # Placeholder, actual extraction would require HTML parsing
+        'domain_age': 0,  # Placeholder, requires WHOIS lookup
+        'google_index': 0,  # Placeholder, requires API call to check indexing
+        'page_rank': 0,  # Placeholder, requires external service/API
     }
 
-    return [features.get(col, 0) for col in feature_columns]
+    return [features.get(col, 0) for col in [
+        'length_url', 'length_hostname', 'ip', 'nb_dots', 'nb_qm', 'nb_eq', 'nb_slash', 'nb_www', 'ratio_digits_url', 
+        'ratio_digits_host', 'tld_in_subdomain', 'prefix_suffix', 'shortest_word_host', 'longest_words_raw', 
+        'longest_word_path', 'phish_hints', 'nb_hyperlinks', 'ratio_intHyperlinks', 'empty_title', 
+        'domain_in_title', 'domain_age', 'google_index', 'page_rank'
+    ]]
 
 # Streamlit app
 st.title('Phishing URL Detection')
